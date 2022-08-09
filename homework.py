@@ -132,7 +132,9 @@ def main():
                     current_timestamp = response.get('current_date')
                 else:
                     logger.debug('Новый статус отсутствует')
-
+        # Ниже я убрала часть кастомных эксепшенов,
+        # так как у меня появлялась ошибка Function is too complex,
+        # я пока не знаю, как сократить функцию
         except SendMessageException as error:
             logger.error(
                 f'Ошибка при отправке сообщения {error}')
@@ -141,14 +143,6 @@ def main():
                 f'Ошибка {error}'
                 f'Эндпоинт {response.url} недоступен. '
                 f'Код ответа API: {response.status_code}')
-        except AnotherEndpointException as error:
-            logger.error(
-                f'Ошибка {error}'
-                f'Сбой при запросе {ENDPOINT}')
-        except RequestException as error:
-            logger.error(
-                f'Ошибка {error}'
-                f'Ошибка запроса {ENDPOINT}.')
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
