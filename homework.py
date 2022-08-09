@@ -10,7 +10,7 @@ import telegram
 from dotenv import load_dotenv
 from requests import RequestException
 
-from exceptions import HTTPRequestError
+from exceptions import AnotherEndpointException, HTTPRequestError
 
 load_dotenv()
 
@@ -45,9 +45,11 @@ def send_message(bot: telegram.Bot, message: str) -> None:
     try:
         logger.info('Начинаем отправку сообщения')
         bot.send_message(TELEGRAM_CHAT_ID, message)
+    except telegram.TelegramError as error:
+        raise error(
+            'Не удалось отправить сообщение')
+    else:
         logger.info(f'Отправлено сообщение: {message}')
-    except telegram.TelegramError('Не удалось отправить сообщение.'):
-        raise
 
 
 def get_api_answer(current_timestamp: int) -> dict:
@@ -61,15 +63,26 @@ def get_api_answer(current_timestamp: int) -> dict:
         if status == HTTPStatus.OK:
             return response.json()
         else:
-            raise HTTPRequestError(response)
-    except json.decoder.JSONDecodeError(
-            'Ошибка преобразования типа данных'):
-        raise
-    except RequestException(f'Ошибка запроса {ENDPOINT}.'):
-        raise
+            raise HTTPRequestError(
+                'Начинаем поиск ошибки'
+                f'Проверяем значение status_code: {response.status_code}'
+                f'Проверяем значение reason: {response.reason}'
+                f'Проверяем значение сообщения: {response.text}'
+                f'Проверяем ссылку endpoint-а: {ENDPOINT}'
+                f'Проверяем значение headers: {HEADERS}'
+                f'Проверяем значения params: {params}'
+            )
+    except json.decoder.JSONDecodeError as error:
+        raise error(
+            'Ошибка преобразования типа данных')
+    except RequestException as error:
+        raise error(f'Нет доступа к {ENDPOINT}')
+    except AnotherEndpointException as error:
+        raise error(f'Сбой при запросе {ENDPOINT}')
 
 
 def check_response(response: dict) -> list:
+    logger.info('Начинаем проверку ответа сервера')
     """Проверяет API на корректность."""
     if not isinstance(response, dict):
         raise TypeError('Ответ не является словарем')
@@ -77,6 +90,8 @@ def check_response(response: dict) -> list:
         raise KeyError('Словарь ответа API пуст')
     if 'homeworks' not in response:
         raise KeyError('Ключа homeworks не существует')
+    if 'current_date' not in response:
+        raise KeyError('Ключа current_date не существует')
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
         raise KeyError('В homeworks лежит не список')
@@ -100,7 +115,7 @@ def check_tokens() -> bool:
 
 def main():
     """Основная логика работы бота."""
-    if not check_tokens:
+    if not check_tokens():
         logger.critical('Отсутствуют переменные окружения')
         sys.exit('Выполнение программы остановлено')
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
@@ -113,20 +128,27 @@ def main():
                 message = parse_status(homeworks[0])
                 send_message(bot, message)
             else:
-                logger.info('Статус ответа не изменен')
+                logger.debug('Новый статус отсутствует')
             current_timestamp = response.get('current_date')
 
-        except HTTPRequestError:
+        except HTTPRequestError as error:
             logger.warning(
+                f'Ошибка {error}'
                 f'Эндпоинт {response.url} недоступен. '
                 f'Код ответа API: {response.status_code}')
-
-        except RequestException:
-            logger.warning(f'Ошибка запроса {ENDPOINT}.')
+        except AnotherEndpointException as error:
+            logger.warning(
+                f'Ошибка {error}'
+                f'Сбой при запросе {ENDPOINT}')
+        except RequestException as error:
+            logger.warning(
+                f'Ошибка {error}'
+                f'Ошибка запроса {ENDPOINT}.')
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
+            logger.debug(message)
 
         finally:
             time.sleep(RETRY_TIME)
