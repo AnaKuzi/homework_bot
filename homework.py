@@ -88,7 +88,7 @@ def check_response(response: dict) -> list:
     if not isinstance(response, dict):
         raise TypeError('Ответ не является словарем')
     homeworks = response.get('homeworks')
-    if 'homeworks' not in response.keys():
+    if homeworks is None:
         raise KeyError('Ключа homeworks не существует')
     if 'current_date' not in response.keys():
         raise KeyError('Ключа current_date не существует')
@@ -119,22 +119,21 @@ def main():
         sys.exit('Выполнение программы остановлено')
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
+    old_report = ''
     old_message = ''
     while True:
         try:
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             if homeworks:
-                message = parse_status(homeworks[0])
-                if message != old_message:
-                    send_message(bot, message)
-                    old_message = message
+                report = parse_status(homeworks[0])
+                if report != old_report:
+                    send_message(bot, report)
+                    old_report = report
                     current_timestamp = response.get('current_date')
                 else:
                     logger.debug('Новый статус отсутствует')
-        # Ниже я убрала часть кастомных эксепшенов,
-        # так как у меня появлялась ошибка Function is too complex,
-        # я пока не знаю, как сократить функцию
+
         except SendMessageException as error:
             logger.error(
                 f'Ошибка при отправке сообщения {error}')
